@@ -12,3 +12,4 @@
 /Users/igorwestermann/Dev/UFJF/Topicos/Atividade1/obj/Debug/net8.0/Atividade1.pdb
 /Users/igorwestermann/Dev/UFJF/Topicos/Atividade1/obj/Debug/net8.0/Atividade1.genruntimeconfig.cache
 /Users/igorwestermann/Dev/UFJF/Topicos/Atividade1/obj/Debug/net8.0/ref/Atividade1.dll
+/Users/igorwestermann/Dev/UFJF/Topicos/Atividade1/obj/Debug/net8.0/Atividade1.sourcelink.json

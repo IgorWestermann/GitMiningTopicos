@@ -1,8 +1,6 @@
-﻿using System.Diagnostics;
-using System.Linq;
-using System.Collections.Generic;
-using Atividade1.model;
+﻿using Atividade1.model;
 using System.Text.RegularExpressions;
+using System.Text;
 
 namespace Atividade1;
 
@@ -15,16 +13,27 @@ class Program
 
         Console.WriteLine("Total commits: " + analysis.TotalCommits);
         Console.WriteLine("Test-related commits: " + analysis.TestCommits.Count);
+        Console.WriteLine("Total files related to tests: " + analysis.TestCommits.SelectMany(tc => tc.Files).Count());
         Console.WriteLine("Top 5 contributors: ");
         foreach (var contributor in analysis.TopContributors)
         {
             Console.WriteLine($"{contributor.Author}: {contributor.Count}");
         }
-        System.Console.WriteLine("_____________");
-        foreach (var commit in analysis.TestCommits.Take(5))
+
+        Console.WriteLine("\nDetalhes dos commits relacionados a testes:");
+        foreach (var testCommit in analysis.TestCommits.Take(5))
         {
-            Console.WriteLine(commit.Author);
-            Console.WriteLine(commit.Message);
+            Console.WriteLine(@$"
+Commit Hash: {testCommit.Hash.Replace("commit ", "")} 
+Author: {testCommit.Author}
+Date: {testCommit.Date} 
+Message: {testCommit.Message}");
+            Console.WriteLine("Files changed:");
+            foreach (var file in testCommit.Files)
+            {
+                Console.WriteLine($" - {file}");
+            }
+            Console.WriteLine();
         }
     }
 
@@ -42,35 +51,50 @@ class Program
         }
 
         var gitLog = GitMethods.GetLogOutput(repoPath);
-        var sections = SplitGitLogByCommitWithHash(gitLog);
-        foreach (var section in sections)
+        var sections = SplitCommitLog(gitLog);
+        string pattern = @"(?=commit \w{40})";
+        Regex regex = new Regex(pattern);
+
+        var filteredLines = regex.Split(gitLog).Where(line => !string.IsNullOrEmpty(line)).ToList();
+        foreach (var commit in filteredLines)
         {
-            var commits = section.Split(new[] { "\\n" }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var commit in commits)
+            var files = commit.Split("\n", StringSplitOptions.RemoveEmptyEntries);
+
+            var commitDetail = GitMethods.GetCommitDetails(files);
+            if (commitDetail.Hash != null)
             {
-                // Console.WriteLine(commit.Trim().Replace("Author: ", "").Replace("Date:   ", ""));
-                var files = commit.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-                var commitDetail = GitMethods.GetCommitDetails(files);
-                if (commitDetail is not null)
-                {
-                    results.TestCommits.Add(commitDetail);
-                }
-
+                results.TestCommits.Add(commitDetail);
             }
         }
-
         results.TopContributors = GitMethods.GetTopContributors(repoPath).Take(5).ToList();
-
         return results;
     }
 
-
-    public static string[] SplitGitLogByCommitWithHash(string gitLog)
+    public static List<string> SplitCommitLog(string log)
     {
-        string pattern = @"(?<=commit\s+[0-9a-f]{40})\s*(?=\n)";
+        var commits = new List<string>();
+        var currentCommit = new StringBuilder();
 
-        return Regex.Split(gitLog, pattern, RegexOptions.Multiline);
+        foreach (var line in log.Split('\n'))
+        {
+            if (line.StartsWith("commit "))
+            {
+                if (currentCommit.Length > 0)
+                {
+                    commits.Add(currentCommit.ToString());
+                }
+                currentCommit.Clear();
+                currentCommit.AppendLine(line);
+            }
+            else
+            {
+                currentCommit.AppendLine(line);
+            }
+        }
+        if (currentCommit.Length > 0)
+        {
+            commits.Add(currentCommit.ToString());
+        }
+        return commits;
     }
-
 }

@@ -41,55 +41,39 @@ public class GitMethods
         catch (Exception ex)
         {
             Console.WriteLine($"Error getting top contributors: {ex.Message}");
-            return new List<Contributor>(); // Return an empty list if there's an error.
+            return new List<Contributor>();
         }
     }
     public static CommitDetails GetCommitDetails(string[] commit)
     {
-        if (commit.Length > 4 && commit.Any(file => IsTestRelated(file) || IsTestRelatedInMessage(commit[3])))
+        if (commit is null || commit.Length < 4)
         {
-            return new CommitDetails()
+            // Console.WriteLine("Commit data is insufficient.");
+            return new CommitDetails();
+        }
+        var hash = commit[0].Trim();
+        var author = commit[1].Trim().Replace("Author: ", "");
+        var date = commit[2].Replace("Date:   ", "").Trim();
+        var message = commit.Length > 3 ? commit[3].Trim() : string.Empty;
+        var bCommit = new CommitDetails();
+        if (IsTestRelatedInMessage(message))
+        {
+            var files = commit.Skip(4).Where(IsTestRelated).ToArray();
+
+            bCommit.Hash = hash;
+            bCommit.Author = author;
+            bCommit.Date = date;
+            bCommit.Message = IsTestRelatedInMessage(message) ? message : "NO MESSAGE FOUND";
+            bCommit.Files = [];
+
+            if (commit.Any(IsTestRelated))
             {
-                Hash = commit[0].Trim(),
-                Author = commit[1].Trim().Replace("Author: ", ""),
-                Date = commit[2].Replace("Date:   ", ""),
-                Message = commit[3].Trim(),
-                Files = commit.Skip(4).ToArray()
-            };
+                bCommit.Files = files.Distinct().ToArray();
+            }
+            return bCommit;
         }
         return new CommitDetails();
     }
-    public static string GetCommitAuthor(string commit)
-    {
-        string author = SplitCommit(commit, 1);
-        return author;
-    }
-
-    public static DateTime GetCommitDate(string commit)
-    {
-        var dateLine = SplitCommit(commit, 2);
-        return DateTime.Parse(dateLine.Split(' ')[0] + " " + dateLine.Split(' ')[1]);
-    }
-
-    public static string GetCommitMessage(string commit)
-    {
-        var lines = GetCommitLines(commit);
-        return string.Join("\n", lines.Skip(2));
-    }
-
-    private static string SplitCommit(string commit, int index)
-    {
-        string[] lines = GetCommitLines(commit);
-        var line = lines[1];
-        var parts = line.Split(' ');
-        return parts[index];
-    }
-
-    private static string[] GetCommitLines(string commit)
-    {
-        return commit.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-    }
-
     private static bool IsTestRelated(string fileName)
     {
         return fileName.EndsWith(".test.cs") ||
@@ -100,8 +84,8 @@ public class GitMethods
 
     private static bool IsTestRelatedInMessage(string commit)
     {
-        return commit.Contains("test", StringComparison.CurrentCultureIgnoreCase) ||
-            commit.Contains("fix", StringComparison.CurrentCultureIgnoreCase);
+        return !commit.Contains("Merge") && (commit.Contains("test", StringComparison.CurrentCultureIgnoreCase) ||
+            commit.Contains("fix", StringComparison.CurrentCultureIgnoreCase));
     }
     private static string ExecuteGitCommand(string arguments)
     {
@@ -122,7 +106,7 @@ public class GitMethods
         catch (Exception ex)
         {
             Console.WriteLine($"An error occurred executing git command: {ex.Message}");
-            return string.Empty; // Return empty string if there's any error.
+            return string.Empty;
         }
     }
 }
