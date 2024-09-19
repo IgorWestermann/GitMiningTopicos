@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text.RegularExpressions;
 using Atividade1.model;
 
 public class GitMethods
@@ -48,7 +49,6 @@ public class GitMethods
     {
         if (commit is null || commit.Length < 4)
         {
-            // Console.WriteLine("Commit data is insufficient.");
             return new CommitDetails();
         }
         var hash = commit[0].Trim();
@@ -56,37 +56,41 @@ public class GitMethods
         var date = commit[2].Replace("Date:   ", "").Trim();
         var message = commit.Length > 3 ? commit[3].Trim() : string.Empty;
         var bCommit = new CommitDetails();
-        if (IsTestRelatedInMessage(message))
-        {
-            var files = commit.Skip(4).Where(IsTestRelated).ToArray();
+        var files = commit.Skip(4).ToArray();
 
-            bCommit.Hash = hash;
-            bCommit.Author = author;
-            bCommit.Date = date;
-            bCommit.Message = IsTestRelatedInMessage(message) ? message : "NO MESSAGE FOUND";
-            bCommit.Files = [];
+        bCommit.Hash = hash;
+        bCommit.Author = author;
+        bCommit.Date = date;
+        bCommit.Message = IsTestRelatedInMessage(message) ? message : "NO MESSAGE FOUND";
+        bCommit.Files = [];
+        bCommit.Files = files.Distinct().ToArray();
 
-            if (commit.Any(IsTestRelated))
-            {
-                bCommit.Files = files.Distinct().ToArray();
-            }
-            return bCommit;
-        }
-        return new CommitDetails();
+        return bCommit;
+
     }
-    private static bool IsTestRelated(string fileName)
-    {
-        return fileName.EndsWith(".test.cs") ||
-            fileName.EndsWith(".spec.cs") ||
-            fileName.Contains("test") ||
-            fileName.Contains("spec");
-    }
-
     private static bool IsTestRelatedInMessage(string commit)
     {
         return !commit.Contains("Merge") && (commit.Contains("test", StringComparison.CurrentCultureIgnoreCase) ||
             commit.Contains("fix", StringComparison.CurrentCultureIgnoreCase));
     }
+
+    public static List<CommitDetails> GetRefactorCommitDetails(List<CommitDetails> commits, string repoPath)
+    {
+        List<CommitDetails> commitDetails = new();
+        for (int i = 1; i < commits.Count - 1; i++)
+        {
+            string gitCommand = $"diff {commits[i - 1]} {commits[i]}";
+
+            var isRefactorCommit = IsRefactorCommit(ExecuteGitCommand($"--git-dir={repoPath}/.git {gitCommand}"));
+
+            if (isRefactorCommit)
+            {
+                commitDetails.Add(commits[i]);
+            }
+        }
+        return commitDetails;
+    }
+
     private static string ExecuteGitCommand(string arguments)
     {
         using var process = new Process();
@@ -107,6 +111,28 @@ public class GitMethods
         {
             Console.WriteLine($"An error occurred executing git command: {ex.Message}");
             return string.Empty;
+        }
+    }
+
+    public static bool IsRefactorCommit(string diffResult)
+    {
+        Regex methodRenameRegex = new(@"- public (\w+)\s+(\w+)\s*\(.*\)\s*{[\s\S]*\+ public (\w+)\s+(\w+)\s*\(.*\)\s*{");
+
+        MatchCollection matches = methodRenameRegex.Matches(diffResult);
+
+        if (matches.Count > 0)
+        {
+            Console.WriteLine("Method renaming detected:");
+            foreach (Match match in matches)
+            {
+                Console.WriteLine($"Old method: {match.Groups[2].Value}, New method: {match.Groups[4].Value}");
+            }
+            return true;
+        }
+        else
+        {
+            Console.WriteLine("No method renaming detected.");
+            return false;
         }
     }
 }
